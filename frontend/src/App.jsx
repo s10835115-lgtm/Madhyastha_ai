@@ -12,6 +12,7 @@ import ArbitratorDashboard from './pages/ArbitratorDashboard'
 import CourtFiling from './pages/CourtFiling'
 import Admin from './pages/Admin'
 import Landing from './pages/Landing'
+import Dashboard from './pages/Dashboard'
 
 const API_URL = 'http://localhost:8000'
 export const AppContext = createContext()
@@ -27,7 +28,13 @@ function Navbar() {
   const location = useLocation()
   const [open, setOpen] = useState(false)
   
-  const links = ['Home', 'Solutions', 'How It Works', 'Pricing', 'Resources', 'Contact']
+  const links = [
+    { label: 'Home', path: '/' },
+    { label: 'Dashboard', path: '/dashboard' },
+    { label: 'Register', path: '/register' },
+    { label: 'Prevention', path: '/admin' },
+    { label: 'Arbitrator', path: '/arbitrator-dashboard' },
+  ]
   const isActive = (p) => location.pathname === p
 
   return (
@@ -56,24 +63,24 @@ function Navbar() {
 
           {/* Links (Center) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }} className="nav-links">
-            {links.map((label) => (
-              <Link key={label} to={label === 'Home' ? '/' : '#'} style={{
-                fontSize: '0.9rem', fontWeight: 500, color: '#475569', transition: 'color 0.3s'
-              }} onMouseOver={e => e.target.style.color = '#0f172a'} onMouseOut={e => e.target.style.color = '#475569'}>
-                {label}
+            {links.map((link) => (
+              <Link key={link.label} to={link.path} style={{
+                fontSize: '0.9rem', fontWeight: 600, 
+                color: isActive(link.path) ? 'var(--primary)' : '#475569', 
+                transition: 'color 0.3s'
+              }}>
+                {link.label}
               </Link>
             ))}
           </div>
 
           {/* CTA (Right) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} className="nav-links">
-            <Link to="/login" className="btn-primary-dark" style={{ 
-              padding: '12px 28px', fontSize: '0.9rem', borderRadius: 100,
-              background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
-              color: 'white', fontWeight: 600, border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: '0 8px 25px rgba(49, 46, 129, 0.4)'
+            <Link to="/register" className="btn-primary" style={{ 
+              padding: '10px 24px', fontSize: '0.88rem', borderRadius: 100,
+              boxShadow: '0 8px 25px rgba(76, 29, 149, 0.2)'
             }}>
-              Get Started
+              New Dispute
             </Link>
           </div>
 
@@ -90,15 +97,15 @@ function Navbar() {
             exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden', padding: '0 24px', margin: '16px 40px', 
             background: 'rgba(255,255,255,0.95)', borderRadius: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.05)' }}>
             <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {links.map((label) => (
-                <Link key={label} to={label === 'Home' ? '/' : '#'} onClick={() => setOpen(false)}
-                  style={{ fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
-                  {label}
+              {links.map((link) => (
+                <Link key={link.label} to={link.path} onClick={() => setOpen(false)}
+                  style={{ fontSize: '1rem', fontWeight: 500, color: isActive(link.path) ? 'var(--primary)' : '#475569' }}>
+                  {link.label}
                 </Link>
               ))}
-              <Link to="/login" onClick={() => setOpen(false)}
-                style={{ background: '#0f172a', color: 'white', padding: '12px', borderRadius: 12, textAlign: 'center', fontWeight: 600 }}>
-                Get Started
+              <Link to="/register" onClick={() => setOpen(false)}
+                style={{ background: 'var(--primary)', color: 'white', padding: '12px', borderRadius: 12, textAlign: 'center', fontWeight: 600 }}>
+                New Dispute
               </Link>
             </div>
           </motion.div>
@@ -122,6 +129,7 @@ function AnimatedRoutes() {
       <motion.div key={location.pathname} {...pageTransition}>
         <Routes location={location}>
           <Route path="/" element={<Landing />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/caucus" element={<Caucus />} />
@@ -144,7 +152,7 @@ export default function App() {
   return (
     <AppContext.Provider value={{ API_URL, token, setToken: saveToken }}>
       <BrowserRouter>
-        <div style={{ background: '#e2e8f0', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: 'var(--bg-base)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
           <Navbar />
           <main style={{ paddingTop: 120, flex: 1 }}>
             <AnimatedRoutes />

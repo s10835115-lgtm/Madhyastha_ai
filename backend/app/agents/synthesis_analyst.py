@@ -50,12 +50,16 @@ class SynthesisAnalyst:
             rag_precedents=precedents_text,
         )
 
-        result = await groq_service.chat_json(
-            system_prompt=system_prompt,
-            user_message="Analyze both statements and generate settlement options.",
-            temperature=0.3,
-            max_tokens=4096,
-        )
+        try:
+            result = await groq_service.chat_json(
+                system_prompt=system_prompt,
+                user_message="Analyze both statements and generate settlement options.",
+                temperature=0.3,
+                max_tokens=4096,
+            )
+        except Exception as e:
+            logger.error(f"Groq synthesis failed: {e}")
+            result = self._default_synthesis()
 
         # Validate required fields
         if "settlement_options" not in result:

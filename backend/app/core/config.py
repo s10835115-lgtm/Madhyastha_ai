@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ── LLM ─────────────────────────────────────────────────────────────────
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama3-70b-8192"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
     # ── Auth ────────────────────────────────────────────────────────────────
     JWT_SECRET_KEY: str = "madhyastha-secret-key-change-in-production-min-32-chars"
@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # ── AI APIs ─────────────────────────────────────────────────────────────
     BHASHINI_USER_ID: str = ""
     BHASHINI_API_KEY: str = ""
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_VOICE_ID: str = "JBFqnCBv7z4s9p6Wzi7B" # Default clear voice (Aria)
 
     # ── ML Paths ────────────────────────────────────────────────────────────
     FAISS_INDEX_PATH: str = "data/kanoon_faiss.index"

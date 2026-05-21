@@ -65,11 +65,13 @@ async def register_dispute(data: DisputeRegister, background_tasks: BackgroundTa
 
     # Send email notifications in background (non-blocking)
     if data.party_a.email:
+        logger.info(f"Adding background task to notify Party A: {data.party_a.email}")
         background_tasks.add_task(
             send_dispute_link, data.party_a.name, data.party_a.email,
             "party_a", party_a_link, data.title
         )
     if data.party_b.email:
+        logger.info(f"Adding background task to notify Party B: {data.party_b.email}")
         background_tasks.add_task(
             send_dispute_link, data.party_b.name, data.party_b.email,
             "party_b", party_b_link, data.title

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppContext } from '../App'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Gavel, LogIn, User, Shield, CheckCircle, Clock, AlertTriangle, Send, MessageSquare, Bot, Users, XCircle, Pen, X } from 'lucide-react'
+import { Gavel, LogIn, User, Shield, CheckCircle, Clock, AlertTriangle, Send, MessageSquare, Bot, Users, XCircle, Pen, X, Mic, MicOff, Volume2, Square } from 'lucide-react'
+import useSpeechToText from '../hooks/useSpeechToText'
 
 export default function ArbitratorDashboard() {
   const { API_URL } = useAppContext()
@@ -18,8 +19,19 @@ export default function ArbitratorDashboard() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [connected, setConnected] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(null)
   const wsRef = useRef(null)
   const chatEndRef = useRef(null)
+  const audioRef = useRef(null)
+  const abortControllerRef = useRef(null)
+
+  const { isListening, transcript, startListening, stopListening, isSupported: sttSupported } = useSpeechToText()
+
+  useEffect(() => {
+    if (transcript) {
+      setInput(prev => (prev ? prev + ' ' + transcript : transcript))
+    }
+  }, [transcript])
 
   useEffect(() => { if (arbToken) loadDashboard() }, [arbToken])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -79,7 +91,8 @@ export default function ArbitratorDashboard() {
     setActiveSession(disputeId)
     setMessages([])
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/arbitrator/${disputeId}?token=${arbToken}`)
+    const wsUrl = API_URL.replace('http', 'ws')
+    const ws = new WebSocket(`${wsUrl}/ws/arbitrator/${disputeId}?token=${arbToken}`)
     wsRef.current = ws
     ws.onopen = () => setConnected(true)
     ws.onclose = () => setConnected(false)
@@ -87,10 +100,70 @@ export default function ArbitratorDashboard() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === 'history') setMessages(data.messages || [])
-      else if (data.type === 'message') setMessages(p => [...p, data])
-      else if (data.type === 'system') setMessages(p => [...p, { role: 'system', content: data.content }])
+      else if (data.type === 'message') {
+        setMessages(p => [...p, data])
+        // Arbitrators might want to hear messages too
+        if (data.role === 'mediator' || data.role === 'system') {
+           playTTS(data.content, data.id || Date.now())
+        }
+      }
+      else if (data.type === 'system') {
+        setMessages(p => [...p, { role: 'system', content: data.content }])
+        playTTS(data.content, Date.now())
+      }
       else if (data.type === 'signal') {
         if (data.signal === 'AGREEMENT_REACHED') setMessages(p => [...p, { role: 'system', content: '✅ Agreement reached!' }])
+      }
+    }
+  }
+
+  const playTTS = async (text, msgId) => {
+    try {
+      // Cancel any ongoing fetch request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      if (isSpeaking === msgId && audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+        setIsSpeaking(null)
+        return
+      }
+
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      setIsSpeaking(msgId)
+
+      const res = await fetch(`${API_URL}/voice/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, use_elevenlabs: true }),
+        signal: controller.signal
+      })
+
+      if (!res.ok) throw new Error('TTS failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      
+      if (audioRef.current) {
+        audioRef.current.src = url
+        audioRef.current.play()
+        audioRef.current.onended = () => {
+          setIsSpeaking(null)
+          abortControllerRef.current = null
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error('TTS Error:', e)
+        setIsSpeaking(null)
+        abortControllerRef.current = null
       }
     }
   }
@@ -239,19 +312,27 @@ export default function ArbitratorDashboard() {
             const isSystem = msg.role === 'system'
             const isMediator = msg.role === 'mediator'
             return (
-              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                style={{ marginBottom: 10, textAlign: isSystem ? 'center' : isArb ? 'right' : 'left' }}>
+              <motion.div key={i} initial={{ opacity: 0, x: isArb ? 20 : -20 }} animate={{ opacity: 1, x: 0 }}
+                style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: isSystem ? 'center' : isArb ? 'flex-end' : 'flex-start' }}>
                 {isSystem ? (
-                  <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>{msg.content}</span>
+                  <div className="chat-bubble-system">{msg.content}</div>
                 ) : (
-                  <div style={{ display: 'inline-block', maxWidth: '75%', padding: '12px 16px', borderRadius: 14,
-                    background: isArb ? 'rgba(237,137,54,0.15)' : isMediator ? 'rgba(118,75,162,0.12)' : 'rgba(102,126,234,0.1)',
-                    border: `1px solid ${isArb ? 'rgba(237,137,54,0.25)' : isMediator ? 'rgba(118,75,162,0.2)' : 'rgba(102,126,234,0.2)'}` }}>
+                  <div style={{ maxWidth: '85%' }}>
                     <div style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: 4,
-                      color: isArb ? '#ed8936' : isMediator ? '#a78bfa' : '#667eea' }}>
-                      {msg.party_name || msg.role}
+                      color: isArb ? '#ed8936' : isMediator ? '#764ba2' : '#667eea',
+                      display: 'flex', alignItems: 'center', justifyContent: isArb ? 'flex-end' : 'flex-start', gap: 6 }}>
+                      {msg.party_name || (isArb ? 'You (Arbitrator)' : msg.role)}
+                      {(isMediator || isSystem) && (
+                        <button onClick={() => playTTS(msg.content, i)} style={{ background: 'none', border: 'none', color: isSpeaking === i ? '#ed8936' : '#94a3b8', cursor: 'pointer', padding: 0 }}>
+                          {isSpeaking === i ? <Square size={12} fill="#ed8936" /> : <Volume2 size={12} />}
+                        </button>
+                      )}
                     </div>
-                    <div style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.5 }}>{msg.content}</div>
+                    <div className={isArb ? 'chat-bubble chat-bubble-user' : (isMediator ? 'chat-bubble chat-bubble-ai' : 'chat-bubble chat-bubble-party-a')} 
+                         style={{ background: isArb ? 'linear-gradient(135deg, #ed8936, #dd6b20)' : undefined, 
+                                  boxShadow: isArb ? '0 4px 15px rgba(237, 137, 54, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)' }}>
+                      {msg.content}
+                    </div>
                   </div>
                 )}
               </motion.div>
@@ -261,10 +342,20 @@ export default function ArbitratorDashboard() {
         </div>
 
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input className="input-field" placeholder="Type your message as arbitrator..." value={input}
-              onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              style={{ borderRadius: 14 }} />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {sttSupported && (
+              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                onClick={isListening ? stopListening : startListening}
+                style={{ background: isListening ? 'rgba(237,137,54,0.1)' : 'rgba(0,0,0,0.03)', 
+                         border: 'none', color: isListening ? '#ed8936' : '#64748b', 
+                         padding: 10, borderRadius: '50%', cursor: 'pointer' }}>
+                {isListening ? <MicOff size={20} className="animate-pulse" /> : <Mic size={20} />}
+              </motion.button>
+            )}
+            <textarea className="input-field" placeholder={isListening ? "Listening..." : "Type your message as arbitrator..."}
+              value={input} onChange={e => setInput(e.target.value)} 
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              style={{ borderRadius: 14, minHeight: '48px', maxHeight: '120px', padding: '12px 16px' }} />
             <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
               onClick={sendMessage} className="btn-primary" disabled={!input.trim()}
               style={{ padding: '12px 18px', borderRadius: 14, background: 'linear-gradient(135deg, #ed8936, #dd6b20)' }}>
@@ -272,6 +363,7 @@ export default function ArbitratorDashboard() {
             </motion.button>
           </div>
         </div>
+        <audio ref={audioRef} style={{ display: 'none' }} />
       </motion.div>
 
       {/* Sign as Arbitrator */}

@@ -49,6 +49,7 @@ from app.api.routes.arbitrator_auth import router as arbitrator_auth_router
 from app.api.routes.court import router as court_router
 from app.api.routes.websocket import router as ws_router
 from app.api.routes.risk import router as risk_router
+from app.api.routes.voice import router as voice_router
 
 app.include_router(dispute_router)
 app.include_router(caucus_router)
@@ -60,6 +61,7 @@ app.include_router(arbitrator_auth_router)
 app.include_router(court_router)
 app.include_router(ws_router)
 app.include_router(risk_router)
+app.include_router(voice_router)
 
 
 @app.on_event("startup")

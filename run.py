@@ -11,7 +11,10 @@ import time
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT, "backend")
 FRONTEND_DIR = os.path.join(ROOT, "frontend")
-VENV_PYTHON = os.path.join(BACKEND_DIR, "venv", "Scripts", "python.exe")
+if os.name == "nt":
+    VENV_PYTHON = os.path.join(BACKEND_DIR, "venv", "Scripts", "python.exe")
+else:
+    VENV_PYTHON = os.path.join(BACKEND_DIR, "venv", "bin", "python")
 
 processes = []
 

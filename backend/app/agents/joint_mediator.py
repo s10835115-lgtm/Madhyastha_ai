@@ -59,12 +59,16 @@ class JointMediator:
 
         prefixed_message = f"[{party_role} - {party_name}]: {user_message}"
 
-        response = await groq_service.chat(
-            system_prompt=system_prompt,
-            user_message=prefixed_message,
-            temperature=0.6,
-            max_tokens=500,
-        )
+        try:
+            response = await groq_service.chat(
+                system_prompt=system_prompt,
+                user_message=prefixed_message,
+                temperature=0.6,
+                max_tokens=500,
+            )
+        except Exception as e:
+            logger.error(f"Groq mediation failed: {e}")
+            response = "I apologize, but I'm having trouble processing that right now. Could you please rephrase or wait a moment?"
 
         # Check for signals
         signal = None

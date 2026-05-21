@@ -20,12 +20,24 @@ router = APIRouter(prefix="/session", tags=["Joint Mediation Session"])
 @router.get("/{dispute_id}", response_model=SessionResponse)
 async def get_session(dispute_id: str, db: Session = Depends(get_db)):
     """Get session details with AI opening message"""
+    dispute = db.query(Dispute).filter(Dispute.id == dispute_id).first()
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+
+    # If in arbitration, look for arbitration session, else look for ai_mediation session
+    session_type = "arbitration" if dispute.status in ["arbitration_hearing", "award_issued"] else "ai_mediation"
+    
     session = db.query(MediationSession).filter(
         MediationSession.dispute_id == dispute_id,
-        MediationSession.session_type == "ai_mediation"
+        MediationSession.session_type == session_type
     ).first()
+    
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found. Caucus phase may not be complete.")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Session not found. Current dispute status: {dispute.status}. Caucus phase may not be complete."
+        )
+    
     return SessionResponse.model_validate(session)
 
 

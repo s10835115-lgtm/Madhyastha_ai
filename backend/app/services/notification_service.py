@@ -18,9 +18,21 @@ logger = logging.getLogger("madhyastha.notify")
 
 async def send_email(to_email: str, subject: str, body: str, attachment_path: Optional[str] = None) -> bool:
     """Send email via SMTP (Gmail) with anti-spam compliant structure"""
-    if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+    # Check for empty or placeholder credentials
+    is_mock = (
+        not settings.SMTP_USER or 
+        not settings.SMTP_PASSWORD or 
+        "your_email" in settings.SMTP_USER or 
+        "your_app_password" in settings.SMTP_PASSWORD
+    )
+
+    if is_mock:
         logger.info(f"[MOCK EMAIL] To: {to_email} | Subject: {subject}")
         logger.info(f"[MOCK EMAIL] Body preview: {_strip_html(body)[:120]}...")
+        if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+            logger.warning("✉ SMTP credentials missing in .env")
+        else:
+            logger.warning("✉ SMTP credentials are still placeholders in .env")
         return True
     try:
         # Root container — allows attachments
@@ -109,22 +121,31 @@ async def notify_parties(dispute, parties, subject: str, message: str):
 async def send_dispute_link(party_name: str, email: str, role: str, link: str, dispute_title: str):
     """Send dispute session link to a party"""
     body = f"""
-    <h3>Hello {party_name},</h3>
-    <p>You have been invited to participate in dispute resolution for:</p>
-    <div style="background: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;">
-        <strong>{dispute_title}</strong><br/>
-        <span style="color: #64748b;">Role: {role.replace('_', ' ').title()}</span>
+    <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; background: #f0fff4; color: #48bb78; padding: 8px 16px; border-radius: 100px; font-weight: 700; font-size: 0.8rem; border: 1px solid #c6f6d5;">
+            ✅ DISPUTE REGISTERED SUCCESSFULLY
+        </div>
     </div>
-    <p>Click the link below to access your private mediation session:</p>
-    <a href="{link}" style="display: inline-block; background: linear-gradient(135deg, #667eea, #764ba2);
-       color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-        Join Mediation Session
-    </a>
-    <p style="margin-top: 16px; font-size: 0.88rem; color: #64748b;">
-        This link is private and unique to you. Do not share it with the other party.
+    <h3>Hello {party_name},</h3>
+    <p>A new dispute has been successfully registered on Madhyastha AI, and you have been named as a party in this matter:</p>
+    <div style="background: #f1f5f9; padding: 20px; border-radius: 12px; margin: 16px 0; border: 1px solid #e2e8f0;">
+        <strong style="font-size: 1.1rem; color: #1e293b;">{dispute_title}</strong><br/>
+        <div style="margin-top: 8px; color: #64748b; font-size: 0.9rem;">
+            <strong>Your Role:</strong> {role.replace('_', ' ').title()}
+        </div>
+    </div>
+    <p>As per the <strong>Mediation Act, 2023</strong>, we invite you to participate in a private AI-assisted mediation session to resolve this matter amicably before it reaches the courts.</p>
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{link}" style="display: inline-block; background: linear-gradient(135deg, #667eea, #764ba2);
+           color: white; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 700; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">
+            Access Private Session
+        </a>
+    </div>
+    <p style="margin-top: 16px; font-size: 0.88rem; color: #64748b; background: #fffaf0; padding: 12px; border-radius: 8px; border: 1px solid #feebc8;">
+        <strong>⚠️ Privacy Notice:</strong> This link is strictly confidential and unique to you. Accessing this link will verify your identity. Do not share it with anyone, including the other party.
     </p>
     """
-    await send_email(email, f"Dispute Invitation: {dispute_title}", body)
+    await send_email(email, f"Dispute Registered: {dispute_title}", body)
 
 
 async def send_agreement_notification(party_name: str, email: str, dispute_title: str, pdf_path: Optional[str] = None):

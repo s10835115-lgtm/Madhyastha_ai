@@ -1,4 +1,4 @@
-# NyayaAI — Complete Build Specification
+# Madhyastha AI — Complete Build Specification
 > AI-Powered Dispute Resolution Platform | India  
 > Legal Anchors: **Mediation Act 2023** + **Arbitration & Conciliation Act 1996** + **CPC 1908**
 
@@ -6,7 +6,7 @@
 
 ## 1. PROJECT OVERVIEW
 
-NyayaAI is a **tiered dispute resolution platform** that intercepts civil disputes before they reach Indian courts. It combines **proactive dispute detection** with a multi-stage resolution pipeline:
+Madhyastha AI is a **tiered dispute resolution platform** that intercepts civil disputes before they reach Indian courts. It combines **proactive dispute detection** with a multi-stage resolution pipeline:
 
 ```
 Prevention (LightGBM) → AI Mediation → Human Mediation → Arbitration → Court Filing
@@ -15,7 +15,7 @@ Prevention (LightGBM) → AI Mediation → Human Mediation → Arbitration → C
 **Core problem:** 5 crore+ pending Indian court cases. The Mediation Act 2023 mandates pre-litigation mediation. No accessible, affordable digital platform exists to make this real.
 
 **One-liner:**  
-*"NyayaAI gives every Indian citizen three chances to resolve their dispute before a courtroom — AI mediation, human mediation, and binding arbitration."*
+*"Madhyastha AI gives every Indian citizen three chances to resolve their dispute before a courtroom — AI mediation, human mediation, and binding arbitration."*
 
 ---
 
@@ -117,6 +117,7 @@ LLM:            Groq API — llama3-70b-8192
 Framework:      React 18 + Vite
 Styling:        Vanilla CSS (premium light theme)
 Realtime:       Native WebSocket client
+Voice:          STT (Web Speech API) + TTS (gTTS & ElevenLabs)
 Signatures:     react-signature-canvas
 State:          React Context + useState
 Charts:         recharts (stats dashboard)
@@ -597,97 +598,32 @@ Step 12  Award is legally binding under Section 36,
 
 ## 11. DIRECTORY STRUCTURE
 
-```
-nyayaai/
+```text
+Madhyastha_AI/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py
-│   │   ├── core/
-│   │   │   ├── config.py
-│   │   │   ├── security.py
-│   │   │   ├── middleware.py
-│   │   │   ├── dependencies.py
-│   │   │   └── websocket_manager.py
-│   │   ├── db/
-│   │   │   └── database.py
-│   │   ├── models/
-│   │   │   └── models.py
-│   │   ├── schemas/
-│   │   │   └── schemas.py
-│   │   ├── api/routes/
-│   │   │   ├── dispute.py
-│   │   │   ├── caucus.py
-│   │   │   ├── session.py
-│   │   │   ├── agreement.py
-│   │   │   ├── escalation.py       ← human + arbitration
-│   │   │   ├── arbitration.py      ← full arbitration management
-│   │   │   ├── court.py            ← court filing mode
-│   │   │   ├── risk.py             ← prevention engine API
-│   │   │   └── websocket.py
-│   │   ├── agents/
-│   │   │   ├── caucus_interviewer.py
-│   │   │   ├── synthesis_analyst.py
-│   │   │   ├── joint_mediator.py
-│   │   │   ├── agreement_drafter.py
-│   │   │   └── arbitration_brief.py
-│   │   ├── rag/
-│   │   │   ├── retriever.py
-│   │   │   ├── embedder.py
-│   │   │   └── build_index.py
-│   │   ├── services/
-│   │   │   ├── groq_service.py
-│   │   │   ├── pdf_service.py
-│   │   │   ├── notification_service.py
-│   │   │   └── bhashini.py
-│   │   └── prompts/
-│   │       └── mediator_prompts.py
-│   ├── data/
-│   │   ├── kanoon_faiss.index
-│   │   ├── kanoon_chunks.json
-│   │   └── raw/
-│   ├── ml/                          ← Prevention Engine ML
-│   │   ├── risk_scorer/
-│   │   │   ├── generate_training_data.py
-│   │   │   ├── features.py
-│   │   │   ├── train.py
-│   │   │   └── predict.py
-│   │   ├── models/
-│   │   │   └── risk_scorer.pkl      ← trained LightGBM (98.4 KB)
-│   │   └── data/
-│   │       └── training_data.csv    ← 5,000 samples
-│   ├── tests/
-│   │   └── test_backend.py
-│   ├── seed.pyth
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── run.sh
-│   └── README.md
-│
+│   │   ├── agents/          # AI Agent logic (Caucus, Synthesis, Mediator)
+│   │   ├── api/routes/      # FastAPI endpoints (Dispute, Arbitration, WS)
+│   │   ├── core/            # Config, Security, WebSocket Manager
+│   │   ├── db/              # Database session & base
+│   │   ├── models/          # SQLAlchemy Models
+│   │   ├── rag/             # Legal RAG (FAISS + Embedder)
+│   │   ├── services/        # Groq, Bhashini, SMTP, PDF Services
+│   │   └── main.py          # Backend entry point
+│   ├── ml/                  # Prevention Engine (LightGBM Risk Scorer)
+│   ├── data/                # FAISS Index, Chunks, and Mock Cases
+│   └── requirements.txt     # Python dependencies
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Register.jsx        ← Dispute registration
-│   │   │   ├── Caucus.jsx          ← Private caucus chat
-│   │   │   ├── JointSession.jsx    ← Real-time joint mediation
-│   │   │   ├── Agreement.jsx       ← Agreement viewer + signature
-│   │   │   ├── Arbitration.jsx     ← Arbitration consent + status + award
-│   │   │   ├── CourtFiling.jsx     ← Petition + evidence bundle download
-│   │   │   ├── Admin.jsx           ← Stats + Prevention Engine panel
-│   │   │   └── Landing.jsx         ← Public landing page
-│   │   ├── components/
-│   │   │   ├── ChatBubble.jsx
-│   │   │   ├── SignaturePad.jsx
-│   │   │   └── EscalationTracker.jsx
-│   │   ├── hooks/
-│   │   │   └── useWebSocket.js
-│   │   └── App.jsx
-│   ├── public/
-│   ├── package.json
-│   └── vite.config.js
-│
-└── scripts/
-    ├── build_rag_index.py
-    └── seed_arbitrators.py
+│   │   ├── components/      # UI Components (ChatBubble, SignaturePad)
+│   │   ├── pages/           # Application views (Register, JointSession)
+│   │   ├── hooks/           # Custom React hooks (WebSockets)
+│   │   └── App.jsx          # Main App & Routing
+│   ├── package.json         # Frontend dependencies
+│   └── vite.config.js       # Vite configuration
+├── Project_Summary.md       # Detailed technical specification
+├── README.md                # Project documentation
+└── run.py                   # Unified runner script
 ```
 
 ---

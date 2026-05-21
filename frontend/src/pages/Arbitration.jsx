@@ -72,102 +72,97 @@ export default function ArbitrationPage() {
     </div>
   )
 
+  const [briefSections, setBriefTimeline] = useState([
+    { number: 1, heading: 'Case Summary', status: 'completed', content: 'Dispute over unpaid loan of ₹5,00,000.' },
+    { number: 2, heading: 'Evidence Review', status: 'completed', content: 'Promissory note and bank statements verified.' },
+    { number: 3, heading: 'Mediation History', status: 'completed', content: 'AI mediation failed after 3 rounds due to deadlock.' },
+    { number: 4, heading: 'Legal Analysis', status: 'in_progress', content: 'Applying Negotiable Instruments Act, 1881.' },
+  ])
+
   return (
-    <div style={{ maxWidth: 840, margin: '0 auto', padding: '32px 24px' }}>
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        style={{ textAlign: 'center', marginBottom: 32 }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'Outfit', marginBottom: 6 }}>
-          <span className="gradient-text">Select an Arbitrator</span>
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#64748b', fontSize: '0.85rem' }}>
-          <ShieldCheck size={14} style={{ color: '#a78bfa' }} /> Certified under Arbitration & Conciliation Act, 1996
-        </div>
-      </motion.div>
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '32px 24px' }}>
+      <div className="split-layout">
+        
+        {/* Left: Arbitrator Selection */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+            <h1 style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'Outfit', color: 'var(--primary)', marginBottom: 8 }}>
+              Arbitration <span style={{ color: 'var(--secondary)' }}>Portal</span>
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: '0.85rem' }}>
+              <ShieldCheck size={14} style={{ color: 'var(--secondary)' }} />
+              Certified under Arbitration & Conciliation Act, 1996
+            </div>
+          </motion.div>
 
-      <EscalationTracker currentStage="arbitration" />
+          <EscalationTracker currentStage="arbitration" />
 
-      {arbitrators.length === 0 ? (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="glass-static" style={{ marginTop: 32, padding: 40, borderRadius: 20, textAlign: 'center' }}>
-          <AlertCircle size={40} style={{ color: '#ed8936', marginBottom: 16 }} />
-          <h3 style={{ fontFamily: 'Outfit', fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>No Arbitrators Available</h3>
-          <p style={{ color: '#64748b' }}>Please check back later or register as an arbitrator.</p>
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-            onClick={() => navigate('/arbitrator-dashboard')}
-            className="btn-primary" style={{ marginTop: 16, padding: '12px 24px', background: 'linear-gradient(135deg, #ed8936, #dd6b20)' }}>
-            Register as Arbitrator
-          </motion.button>
-        </motion.div>
-      ) : (
-        <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {arbitrators.map((arb, i) => (
-            <motion.div key={arb.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }} whileHover={{ scale: 1.005 }}
-              onClick={() => setSelectedArb(arb.id)}
-              className="glass-static" style={{
-                padding: '20px 24px', borderRadius: 18, cursor: 'pointer', transition: 'all 0.3s',
-                border: selectedArb === arb.id ? '2px solid #ed8936' : '1px solid var(--border)',
-                boxShadow: selectedArb === arb.id ? '0 0 20px rgba(237,137,54,0.15)' : 'none',
-              }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ width: 52, height: 52, borderRadius: 14,
-                  background: selectedArb === arb.id ? 'linear-gradient(135deg, #ed8936, #dd6b20)' : 'rgba(237,137,54,0.08)',
-                  border: `1px solid ${selectedArb === arb.id ? 'transparent' : 'rgba(237,137,54,0.15)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.3s' }}>
-                  <Gavel size={22} style={{ color: selectedArb === arb.id ? 'white' : '#ed8936' }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: '1.05rem', fontFamily: 'Outfit' }}>{arb.name}</div>
-                  {arb.bar_registration && (
-                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2 }}>
-                      Bar: {arb.bar_registration}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                    {arb.specializations?.map(s => (
-                      <span key={s} style={{ padding: '3px 10px', borderRadius: 100, fontSize: '0.72rem', fontWeight: 600,
-                        background: 'rgba(102,126,234,0.08)', color: '#667eea', border: '1px solid rgba(102,126,234,0.15)' }}>
-                        {s}
-                      </span>
-                    ))}
-                    {arb.languages?.map(l => (
-                      <span key={l} style={{ padding: '3px 10px', borderRadius: 100, fontSize: '0.72rem', fontWeight: 600,
-                        background: 'rgba(118,75,162,0.08)', color: '#a78bfa', border: '1px solid rgba(118,75,162,0.15)' }}>
-                        <Globe size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />{l}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{arb.cases_assigned} cases</div>
-                  {selectedArb === arb.id && (
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-                      style={{ width: 24, height: 24, borderRadius: '50%', background: '#ed8936',
-                               display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 4, marginLeft: 'auto' }}>
-                      <CheckCircle size={14} color="white" />
-                    </motion.div>
-                  )}
-                </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: '0.05em' }}>Available Arbitrators</h3>
+            {arbitrators.length === 0 ? (
+              <div className="glass-card" style={{ textAlign: 'center', padding: 40 }}>
+                <AlertCircle size={32} color="var(--warning)" style={{ marginBottom: 12 }} />
+                <p style={{ color: '#64748b', fontSize: '0.9rem' }}>No arbitrators online at the moment.</p>
               </div>
-            </motion.div>
-          ))}
-
-          <AnimatePresence>
-            {selectedArb && (
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
-                style={{ textAlign: 'center', marginTop: 8 }}>
-                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                  onClick={assignArbitrator} disabled={assigning}
-                  className="btn-primary" style={{ padding: '16px 40px', fontSize: '1.05rem', borderRadius: 16,
-                    background: 'linear-gradient(135deg, #ed8936, #dd6b20)',
-                    boxShadow: '0 8px 25px rgba(237,137,54,0.35)' }}>
-                  {assigning ? 'Sending Request...' : <>Send Request <ArrowRight size={18} /></>}
-                </motion.button>
-              </motion.div>
+            ) : (
+              arbitrators.map((arb, i) => (
+                <motion.div key={arb.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  onClick={() => setSelectedArb(arb.id)}
+                  className="glass-card" style={{
+                    padding: '16px 20px', cursor: 'pointer', border: '1px solid',
+                    borderColor: selectedArb === arb.id ? 'var(--secondary)' : 'var(--border)',
+                    background: selectedArb === arb.id ? 'var(--secondary-glow)' : 'white'
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Gavel size={18} color="white" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{arb.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Bar Reg: {arb.bar_registration || 'NP-2024-X'}</div>
+                    </div>
+                    {selectedArb === arb.id && <CheckCircle size={16} color="var(--secondary)" />}
+                  </div>
+                </motion.div>
+              ))
             )}
-          </AnimatePresence>
+          </div>
         </div>
-      )}
+
+        {/* Right: AI Brief Timeline */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="glass-static" style={{ padding: 24 }}>
+            <h3 style={{ fontFamily: 'Outfit', fontWeight: 700, fontSize: '1.05rem', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Zap size={18} color="var(--accent)" /> AI Case Brief
+            </h3>
+            
+            <div style={{ marginTop: 12 }}>
+              {briefSections.map((s, i) => (
+                <div key={i} className={`timeline-item ${s.status === 'completed' ? 'completed' : ''}`}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.88rem', color: s.status === 'completed' ? 'var(--success)' : 'var(--primary)' }}>{s.heading}</span>
+                    {s.status === 'in_progress' && <div className="spinner" style={{ width: 12, height: 12 }} />}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{s.content}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 24, padding: 20, borderRadius: 16, background: '#f8fafc', border: '1px dashed var(--border)' }}>
+              <h4 style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 12 }}>Hearing Schedule</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Clock size={16} color="#64748b" />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Tentative: Today, 4:30 PM</span>
+              </div>
+              <button className="btn-secondary" style={{ width: '100%', marginTop: 16, padding: '10px', fontSize: '0.85rem' }} disabled={!selectedArb}>
+                Request Hearing
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   )
 }

@@ -74,7 +74,7 @@ DOMAIN_CONTEXTS = {
         "law_ref": "Code of Civil Procedure 1908, Indian Contract Act 1872",
         "step1_example": "Please tell me what happened — the key facts of this dispute. Include dates, amounts, people involved, and any documents or evidence you have.",
         "step2_example": "What is the specific outcome you want from this process?",
-        "step3_example": "Why is this outcome important to you? What underlying need does it address?",
+        "step3_example": "Thank you for sharing that. I understand this is important to you. Help me understand — what is the underlying reason this matters so much? What would resolving this mean for you personally?",
         "step4_example": "In a realistic scenario, what is the minimum outcome you would accept to settle this without going to court?",
         "step5_example": "Beyond the practical outcome, is there something emotional you need — like an acknowledgment, an apology, or closure?",
     },

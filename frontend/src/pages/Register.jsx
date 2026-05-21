@@ -40,7 +40,6 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
-  const [copied, setCopied] = useState('')
 
   const [form, setForm] = useState({
     title: '', description: '', dispute_type: 'money_loan',
@@ -74,8 +73,6 @@ export default function Register() {
     finally { setLoading(false) }
   }
 
-  const copyText = (text, label) => { navigator.clipboard.writeText(text); setCopied(label); setTimeout(() => setCopied(''), 2000) }
-
   // ── Success Screen ──
   if (result) return (
     <div style={{ maxWidth: 580, margin: '0 auto', padding: '60px 24px' }}>
@@ -88,30 +85,28 @@ export default function Register() {
           <Check size={36} style={{ color: '#48bb78' }} />
         </motion.div>
         <h2 style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'Outfit', marginBottom: 8 }}>Dispute Registered!</h2>
-        <p style={{ color: '#64748b', marginBottom: 28, fontSize: '0.92rem' }}>Share the secure session links with both parties.</p>
+        <p style={{ color: '#64748b', marginBottom: 28, fontSize: '0.92rem' }}>The session links have been sent to both parties via email.</p>
 
         {[{ label: `Party A — ${form.party_a.name}`, link: result.party_a_link, key: 'a', color: '#667eea' },
           { label: `Party B — ${form.party_b.name}`, link: result.party_b_link, key: 'b', color: '#48bb78' }].map((p) => (
           <motion.div key={p.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: p.key === 'a' ? 0.3 : 0.4 }}
-            style={{ padding: 16, borderRadius: 14, background: `${p.color}08`, border: `1px solid ${p.color}20`, marginBottom: 12, textAlign: 'left' }}>
-            <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: 6, fontWeight: 600 }}>{p.label}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input readOnly value={p.link} className="input-field" style={{ fontSize: '0.75rem', padding: '8px 12px' }} />
-              <motion.button whileTap={{ scale: 0.95 }} onClick={() => copyText(p.link, p.key)} className="btn-secondary"
-                style={{ padding: '8px 14px', flexShrink: 0, fontSize: '0.8rem' }}>
-                {copied === p.key ? <Check size={14} /> : <Copy size={14} />}
-              </motion.button>
+            style={{ padding: 20, borderRadius: 18, background: `${p.color}08`, border: `1px solid ${p.color}20`, marginBottom: 16, textAlign: 'left',
+                     display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: 700, marginBottom: 2 }}>{p.label}</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Secure Mediation Link</div>
             </div>
+            <motion.a href={p.link} target="_blank" rel="noopener noreferrer" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              className="btn-primary" style={{ padding: '10px 20px', fontSize: '0.8rem', borderRadius: 100, background: p.color, boxShadow: `0 4px 12px ${p.color}30` }}>
+              Click Here <ExternalLink size={14} style={{ marginLeft: 6 }} />
+            </motion.a>
           </motion.div>
         ))}
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24 }}>
-          <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.98 }} className="btn-primary"
-            onClick={() => navigate(`/caucus?token=${result.party_a_token}`)} style={{ fontSize: '0.9rem' }}>
-            Open as Party A <ExternalLink size={14} />
-          </motion.button>
-          <button className="btn-secondary" onClick={() => { setResult(null); setStep(0) }} style={{ fontSize: '0.9rem' }}>
-            Register Another
+          <button className="btn-secondary" onClick={() => { setResult(null); setStep(0) }} 
+            style={{ padding: '12px 32px', borderRadius: 100, fontSize: '0.9rem' }}>
+            Register Another Dispute
           </button>
         </div>
       </motion.div>
@@ -211,11 +206,16 @@ export default function Register() {
                   onChange={e => updateParty('party_a', 'email', e.target.value)} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label"><Globe size={12} style={{ display: 'inline' }} /> Language</label>
-                <select className="input-field" value={form.party_a.language}
-                  onChange={e => updateParty('party_a', 'language', e.target.value)}>
-                  {LANGS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
+                <label className="form-label"><Globe size={12} style={{ display: 'inline' }} /> Language Preference</label>
+                <div className="pill-selector">
+                  {LANGS.map(l => (
+                    <div key={l.value} 
+                      className={`pill ${form.party_a.language === l.value ? 'selected' : ''}`}
+                      onClick={() => updateParty('party_a', 'language', l.value)}>
+                      {l.label}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </motion.div>
@@ -245,11 +245,16 @@ export default function Register() {
                   onChange={e => updateParty('party_b', 'email', e.target.value)} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label">Language</label>
-                <select className="input-field" value={form.party_b.language}
-                  onChange={e => updateParty('party_b', 'language', e.target.value)}>
-                  {LANGS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
+                <label className="form-label">Language Preference</label>
+                <div className="pill-selector">
+                  {LANGS.map(l => (
+                    <div key={l.value} 
+                      className={`pill ${form.party_b.language === l.value ? 'selected' : ''}`}
+                      onClick={() => updateParty('party_b', 'language', l.value)}>
+                      {l.label}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </motion.div>

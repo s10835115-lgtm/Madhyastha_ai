@@ -154,6 +154,13 @@ class GroqService:
     def _mock_caucus_response(self, user_message: str) -> str:
         """Mock caucus interviewer responses"""
         keywords = user_message.lower()
+        # If input is very short or gibberish
+        if len(user_message.strip()) < 5:
+            return (
+                "I didn't quite catch that. Could you please provide more detail about "
+                "your perspective so I can assist you better in this mediation?"
+            )
+
         if any(w in keywords for w in ["want", "demand", "claim", "need", "pay", "return"]):
             return (
                 "Thank you for sharing that. I understand this is important to you. "
@@ -168,9 +175,9 @@ class GroqService:
             )
         else:
             return (
-                "Thank you for sharing your perspective. I want to make sure I understand fully. "
-                "Could you tell me: what specific outcome are you hoping for from this mediation? "
-                "What would a good resolution look like to you?"
+                "I appreciate you sharing that. To help me build a complete picture for the "
+                "mediation, could you tell me a bit more about the history of this dispute? "
+                "How did this situation first begin?"
             )
 
     def _mock_synthesis_response(self) -> str:

@@ -18,10 +18,12 @@ logger = logging.getLogger("madhyastha.ws")
 router = APIRouter(tags=["WebSocket"])
 
 
+from app.db.database import SessionLocal
+
 @router.websocket("/ws/session/{dispute_id}")
 async def websocket_session(websocket: WebSocket, dispute_id: str, token: str = Query(...)):
     """WebSocket endpoint for real-time joint mediation (AI mediator)"""
-    db = next(get_db_gen())
+    db = SessionLocal()
 
     try:
         token_data = verify_party_token(token)
@@ -158,7 +160,7 @@ async def websocket_session(websocket: WebSocket, dispute_id: str, token: str = 
 @router.websocket("/ws/arbitrator/{dispute_id}")
 async def websocket_arbitrator(websocket: WebSocket, dispute_id: str, token: str = Query(...)):
     """WebSocket for arbitrator to join session as human mediator"""
-    db = next(get_db_gen())
+    db = SessionLocal()
 
     # Verify arbitrator token
     try:

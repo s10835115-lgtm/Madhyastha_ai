@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useAppContext } from '../App'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Users, AlertTriangle, CheckCircle, Wifi, WifiOff, Bot, User, MessageSquare, Flame } from 'lucide-react'
+import { Send, Users, AlertTriangle, CheckCircle, Wifi, WifiOff, Bot, User, MessageSquare, Flame, Mic, MicOff, Volume2, Square } from 'lucide-react'
 import EscalationTracker from '../components/EscalationTracker'
+import useSpeechToText from '../hooks/useSpeechToText'
 
 export default function JointSession() {
   const { disputeId } = useParams()
@@ -14,11 +15,24 @@ export default function JointSession() {
 
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [connected, setConnected] = useState(false)
   const [signal, setSignal] = useState(null)
   const [escalationScore, setEscalationScore] = useState(0)
+  const [isSpeaking, setIsSpeaking] = useState(null) // track which msg is being spoken
   const wsRef = useRef(null)
   const chatEndRef = useRef(null)
+  const audioRef = useRef(null)
+  const abortControllerRef = useRef(null)
+
+  const { isListening, transcript, startListening, stopListening, isSupported: sttSupported } = useSpeechToText()
+
+  useEffect(() => {
+    if (transcript) {
+      setInput(prev => (prev ? prev + ' ' + transcript : transcript))
+    }
+  }, [transcript])
 
   useEffect(() => { loadSession(); connectWebSocket(); return () => { if (wsRef.current) wsRef.current.close() } }, [disputeId])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -26,12 +40,25 @@ export default function JointSession() {
   const loadSession = async () => {
     try {
       const res = await fetch(`${API_URL}/session/${disputeId}`)
-      if (res.ok) { const data = await res.json(); if (data.messages) setMessages(data.messages) }
-    } catch (e) { console.error('Failed to load session', e) }
+      if (res.ok) { 
+        const data = await res.json()
+        if (data.messages) setMessages(data.messages) 
+        setError(null)
+      } else {
+        const errData = await res.json()
+        setError(errData.detail || 'Failed to load session')
+      }
+    } catch (e) { 
+      console.error('Failed to load session', e)
+      setError('Connection error. Please check your network.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const connectWebSocket = () => {
-    const ws = new WebSocket(`ws://localhost:8000/ws/session/${disputeId}?token=${token}`)
+    const wsUrl = API_URL.replace('http', 'ws')
+    const ws = new WebSocket(`${wsUrl}/ws/session/${disputeId}?token=${token}`)
     wsRef.current = ws
     ws.onopen = () => setConnected(true)
     ws.onclose = () => setConnected(false)
@@ -42,11 +69,68 @@ export default function JointSession() {
       else if (data.type === 'message') {
         setMessages(p => [...p, data])
         if (data.escalation_score !== undefined) setEscalationScore(data.escalation_score)
+        // Auto-play AI messages
+        if (data.role === 'mediator') {
+          playTTS(data.content, data.id || Date.now())
+        }
       }
       else if (data.type === 'system') setMessages(p => [...p, { role: 'system', content: data.content }])
       else if (data.type === 'signal') {
         setSignal(data.signal)
         if (data.escalation_score !== undefined) setEscalationScore(data.escalation_score)
+      }
+    }
+  }
+
+  const playTTS = async (text, msgId) => {
+    try {
+      // Cancel any ongoing fetch request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      // If clicking the same message that is already speaking, stop it
+      if (isSpeaking === msgId && audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+        setIsSpeaking(null)
+        return
+      }
+
+      // If something else is speaking, stop it first
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      setIsSpeaking(msgId)
+
+      const res = await fetch(`${API_URL}/voice/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, use_elevenlabs: true }),
+        signal: controller.signal
+      })
+
+      if (!res.ok) throw new Error('TTS failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      
+      if (audioRef.current) {
+        audioRef.current.src = url
+        audioRef.current.play()
+        audioRef.current.onended = () => {
+          setIsSpeaking(null)
+          abortControllerRef.current = null
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error('TTS Error:', e)
+        setIsSpeaking(null)
+        abortControllerRef.current = null
       }
     }
   }
@@ -58,158 +142,172 @@ export default function JointSession() {
   }
 
   const getRoleStyle = (role) => {
-    if (role === 'party_a') return { bg: 'rgba(102,126,234,0.15)', border: 'rgba(102,126,234,0.3)', color: '#7c8cf0', icon: User }
-    if (role === 'party_b') return { bg: 'rgba(72,187,120,0.15)', border: 'rgba(72,187,120,0.3)', color: '#68d391', icon: User }
-    if (role === 'mediator') return { bg: 'rgba(118,75,162,0.15)', border: 'rgba(118,75,162,0.3)', color: '#a78bfa', icon: Bot }
-    if (role === 'arbitrator') return { bg: 'rgba(237,137,54,0.15)', border: 'rgba(237,137,54,0.3)', color: '#ed8936', icon: Users }
-    return { bg: 'var(--bg-card)', border: 'var(--border)', color: 'white', icon: User }
+    if (role === 'party_a') return { bg: '#f0f4ff', color: '#667eea', border: '#667eea', icon: User }
+    if (role === 'party_b') return { bg: '#f0fff4', color: '#48bb78', border: '#48bb78', icon: User }
+    if (role === 'mediator') return { bg: '#ffffff', color: '#764ba2', border: '#764ba2', icon: Bot }
+    if (role === 'arbitrator') return { bg: '#fffaf0', color: '#ed8936', border: '#ed8936', icon: Users }
+    return { bg: '#f1f5f9', color: '#64748b', border: '#64748b', icon: MessageSquare }
   }
 
-  return (
-    <div style={{ maxWidth: 840, margin: '0 auto', padding: '24px 16px' }}>
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        className="glass-static" style={{ padding: '16px 24px', marginBottom: 16, borderRadius: 16,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #f093fb, #f5576c)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Users size={18} color="white" />
-          </div>
-          <div>
-            <h2 style={{ fontFamily: 'Outfit', fontWeight: 700, fontSize: '1.1rem' }}>Joint Mediation</h2>
-            <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>Real-time session with AI Mediator</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Escalation Score Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 100,
-            background: escalationScore >= 1 ? 'rgba(252,92,101,0.1)' : 'rgba(0,0,0,0.03)',
-            border: `1px solid ${escalationScore >= 1 ? 'rgba(252,92,101,0.25)' : 'rgba(0,0,0,0.06)'}` }}>
-            <Flame size={12} style={{ color: escalationScore >= 1 ? '#fc5c65' : '#94a3b8' }} />
-            <div style={{ width: 8, height: 8, borderRadius: '50%', transition: 'all 0.5s',
-              background: escalationScore >= 1 ? '#fc5c65' : 'rgba(0,0,0,0.08)',
-              boxShadow: escalationScore >= 1 ? '0 0 6px rgba(252,92,101,0.4)' : 'none'
-            }} />
-            <span style={{ fontSize: '0.7rem', fontWeight: 600,
-              color: escalationScore >= 1 ? '#fc5c65' : '#94a3b8' }}>
-              {escalationScore}/1
-            </span>
-          </div>
-          <div className={`badge ${connected ? 'badge-success' : 'badge-danger'}`} style={{ gap: 6 }}>
-            {connected ? <Wifi size={12} /> : <WifiOff size={12} />} {connected ? 'Live' : 'Disconnected'}
-          </div>
+  const [settlementOptions, setSettlementOptions] = useState([
+    { id: 'A', title: 'Structured Repayment', terms: 'Pay 50% now, 50% in 6 months', precedent: 'State Bank of India vs. Santosh Gupta (2016)' },
+    { id: 'B', title: 'Full Waiver of Interest', terms: 'Pay principal amount only within 30 days', precedent: 'Central Bank of India vs. Ravindra (2001)' }
+  ])
+  const [selectedOption, setSelectedOption] = useState(null)
+
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', flexDirection: 'column', gap: 20 }}>
+      <div className="spinner" />
+      <p style={{ color: '#64748b', fontWeight: 600 }}>Initializing joint session...</p>
+    </div>
+  )
+
+  if (error) return (
+    <div style={{ maxWidth: 500, margin: '100px auto', textAlign: 'center', padding: '0 24px' }}>
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card" style={{ padding: 40 }}>
+        <AlertTriangle size={48} color="var(--warning)" style={{ marginBottom: 20 }} />
+        <h2 style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: '1.5rem', marginBottom: 12 }}>Session Unavailable</h2>
+        <p style={{ color: '#64748b', lineHeight: 1.6, marginBottom: 24 }}>{error}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ width: '100%', justifyContent: 'center' }}>
+            Back to Dashboard
+          </button>
+          <button className="btn-secondary" onClick={() => loadSession()} style={{ width: '100%', justifyContent: 'center', background: 'rgba(76, 29, 149, 0.05)', color: 'var(--primary)', border: '1px solid var(--primary-glow)' }}>
+            Retry Loading
+          </button>
         </div>
       </motion.div>
+    </div>
+  )
 
-      <EscalationTracker currentStage="joint_session" />
-
-      <AnimatePresence>
-        {signal === 'AGREEMENT_REACHED' && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-            style={{ overflow: 'hidden', marginTop: 16 }}>
-            <div style={{ padding: '16px 20px', borderRadius: 16, background: 'rgba(72,187,120,0.08)',
-                          border: '1px solid rgba(72,187,120,0.25)', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-                <CheckCircle size={32} style={{ color: '#48bb78' }} />
-              </motion.div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: '#68d391', fontSize: '1.05rem', fontFamily: 'Outfit' }}>Agreement Reached!</div>
-                <div style={{ fontSize: '0.88rem', color: '#94a3b8', marginTop: 2 }}>Both parties have agreed. The settlement document is ready.</div>
+  return (
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
+      <div className="split-layout">
+        
+        {/* Left: Chat Session */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+            className="glass-static" style={{ padding: '16px 24px', borderRadius: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={18} color="white" />
               </div>
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                onClick={() => navigate(`/agreement/${disputeId}`)} className="btn-primary" style={{ padding: '10px 20px', fontSize: '0.9rem' }}>
-                View Agreement
-              </motion.button>
+              <div>
+                <h2 style={{ fontFamily: 'Outfit', fontWeight: 700, fontSize: '1.1rem' }}>Joint Mediation</h2>
+                <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>Real-time session with AI Mediator</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className={`badge ${connected ? 'badge-success' : 'badge-danger'}`} style={{ gap: 6 }}>
+                {connected ? <Wifi size={12} /> : <WifiOff size={12} />} {connected ? 'Live' : 'Disconnected'}
+              </div>
             </div>
           </motion.div>
-        )}
 
-        {signal === 'ESCALATE_TO_ARBITRATION' && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-            style={{ overflow: 'hidden', marginTop: 16 }}>
-            <div style={{ padding: '16px 20px', borderRadius: 16, background: 'rgba(237,137,54,0.08)',
-                          border: '1px solid rgba(237,137,54,0.25)', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}>
-                <AlertTriangle size={32} style={{ color: '#ed8936' }} />
-              </motion.div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: '#f6ad55', fontSize: '1.05rem', fontFamily: 'Outfit' }}>Escalated to Arbitration</div>
-                <div style={{ fontSize: '0.88rem', color: '#64748b', marginTop: 2 }}>AI mediation was unable to reach agreement. This dispute has been escalated to binding arbitration under the Arbitration & Conciliation Act, 1996.</div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="glass-static" style={{ borderRadius: 20, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+              <AnimatePresence>
+                {messages.map((msg, i) => {
+                  const isSystem = msg.role === 'system'
+                  const style = getRoleStyle(msg.role)
+                  const isSelf = msg.role === 'party_a' || msg.role === 'party_b'
+
+                  return (
+                    <motion.div key={i} initial={{ opacity: 0, x: isSelf ? 20 : -20 }} animate={{ opacity: 1, x: 0 }}
+                      style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: isSystem ? 'center' : isSelf ? 'flex-end' : 'flex-start' }}>
+                      {isSystem ? (
+                        <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                          <span className="badge badge-active">{msg.content}</span>
+                        </div>
+                      ) : (
+                        <div style={{ maxWidth: '85%' }}>
+                          <div style={{ fontSize: '0.72rem', color: style.color, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: isSelf ? 'flex-end' : 'flex-start', gap: 6 }}>
+                            {msg.party_name || (msg.role === 'mediator' ? 'AI Mediator' : msg.role)}
+                            {msg.role === 'mediator' && (
+                              <button onClick={() => playTTS(msg.content, i)} style={{ background: 'none', border: 'none', color: isSpeaking === i ? 'var(--danger)' : '#94a3b8', cursor: 'pointer', padding: 0 }}>
+                                {isSpeaking === i ? <Square size={12} fill="var(--danger)" /> : <Volume2 size={12} />}
+                              </button>
+                            )}
+                          </div>
+                          <div className={isSelf ? `chat-bubble chat-bubble-party-${token === 'party_a' ? 'a' : 'b'}` : (msg.role === 'mediator' ? 'chat-bubble chat-bubble-ai' : `chat-bubble chat-bubble-party-${token === 'party_a' ? 'b' : 'a'}`)}>
+                            {msg.content}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+              <div ref={chatEndRef} />
+            </div>
+
+            <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', background: 'white' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <textarea className="input-field" placeholder="Type your message..."
+                  value={input} onChange={e => setInput(e.target.value)} 
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  style={{ borderRadius: 16, minHeight: '48px', maxHeight: '120px' }} />
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                  onClick={sendMessage} className="btn-primary" style={{ padding: '12px', borderRadius: '50%' }}>
+                  <Send size={18} />
+                </motion.button>
               </div>
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                onClick={() => navigate(`/arbitration/${disputeId}`)} className="btn-primary" style={{ padding: '10px 20px', fontSize: '0.9rem' }}>
-                View Arbitration
-              </motion.button>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-        className="glass-static" style={{ marginTop: 16, borderRadius: 20, display: 'flex', flexDirection: 'column', height: '65vh', overflow: 'hidden' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 12px' }}>
-          {messages.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '60px 0', color: '#334155' }}>
-              <MessageSquare size={40} style={{ marginBottom: 12, opacity: 0.3 }} />
-              <p style={{ fontSize: '0.92rem' }}>Waiting for messages...</p>
-            </div>
-          )}
-
-          <AnimatePresence>
-            {messages.map((msg, i) => {
-              if (msg.role === 'system') return (
-                <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                  style={{ textAlign: 'center', margin: '16px 0' }}>
-                  <span style={{ background: 'rgba(0,0,0,0.03)', padding: '6px 16px', borderRadius: 100,
-                                 fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', border: '1px solid rgba(0,0,0,0.05)' }}>
-                    {msg.content}
-                  </span>
-                </motion.div>
-              )
-
-              const style = getRoleStyle(msg.role)
-              const isSelf = msg.role === 'party_a' || msg.role === 'party_b' // Simplified alignment logic
-
-              return (
-                <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                  style={{ display: 'flex', justifyContent: isSelf ? 'flex-end' : 'flex-start', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: '80%', flexDirection: isSelf ? 'row-reverse' : 'row' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, background: style.bg, border: `1px solid ${style.border}`,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <style.icon size={16} style={{ color: style.color }} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.72rem', color: style.color, fontWeight: 600, marginBottom: 4, textAlign: isSelf ? 'right' : 'left' }}>
-                        {msg.party_name || (msg.role === 'mediator' ? 'AI Mediator' : msg.role)}
-                      </div>
-                      <div className="chat-bubble" style={{ background: isSelf ? style.bg : 'var(--bg-card)',
-                            border: `1px solid ${isSelf ? style.border : 'var(--border)'}`, color: 'var(--text-primary)',
-                            borderRadius: 16, borderTopRightRadius: isSelf ? 4 : 16, borderTopLeftRadius: !isSelf ? 4 : 16,
-                            padding: '12px 18px', fontSize: '0.92rem' }}>
-                        {msg.content}
-                      </div>
-                    </div>
+        {/* Right: Settlement Options & Precedents */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="glass-static" style={{ padding: 24, height: '100%', overflowY: 'auto' }}>
+            <h3 style={{ fontFamily: 'Outfit', fontWeight: 700, fontSize: '1.1rem', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Sparkles size={18} color="var(--accent)" /> Settlement Options
+            </h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {settlementOptions.map(opt => (
+                <motion.div key={opt.id} whileHover={{ scale: 1.02 }}
+                  onClick={() => setSelectedOption(opt.id)}
+                  style={{ 
+                    padding: 16, borderRadius: 16, cursor: 'pointer', border: '1px solid',
+                    borderColor: selectedOption === opt.id ? 'var(--primary)' : 'var(--border)',
+                    background: selectedOption === opt.id ? 'var(--primary-glow)' : 'white',
+                    transition: 'all 0.3s'
+                  }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.8rem' }}>OPTION {opt.id}</span>
+                    {selectedOption === opt.id && <CheckCircle size={16} color="var(--primary)" />}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 4 }}>{opt.title}</div>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 12 }}>{opt.terms}</div>
+                  
+                  <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 10, borderLeft: '3px solid var(--accent)' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 2 }}>Legal Precedent</div>
+                    <div style={{ fontSize: '0.75rem', color: '#475569', fontStyle: 'italic' }}>{opt.precedent}</div>
                   </div>
                 </motion.div>
-              )
-            })}
-          </AnimatePresence>
-          <div ref={chatEndRef} />
-        </div>
+              ))}
+            </div>
 
-        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <input className="input-field" placeholder="Type your message to the joint session..."
-              value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              disabled={!!signal} style={{ borderRadius: 16 }} />
-            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              onClick={sendMessage} className="btn-primary" disabled={!input.trim() || !!signal}
-              style={{ padding: '12px 20px', borderRadius: 16 }}>
-              <Send size={18} />
-            </motion.button>
+            <div style={{ marginTop: 32 }}>
+              <h4 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 12 }}>Escalation Status</h4>
+              <div style={{ padding: 20, borderRadius: 16, background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <Flame size={16} color="var(--warning)" />
+                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--warning)' }}>Risk Level: {Math.round(escalationScore * 100)}%</span>
+                </div>
+                <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                  <motion.div animate={{ width: `${escalationScore * 100}%` }} style={{ height: '100%', background: 'var(--warning)' }} />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </motion.div>
+
+      </div>
+      <audio ref={audioRef} style={{ display: 'none' }} />
     </div>
   )
 }

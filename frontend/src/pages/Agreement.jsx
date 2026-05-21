@@ -103,14 +103,18 @@ export default function AgreementPage() {
           </h2>
         </div>
 
-        {agreement.terms?.sections?.map((section, i) => (
-          <div key={i} style={{ marginBottom: 32 }}>
-            <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', fontWeight: 700, color: '#a78bfa', marginBottom: 12 }}>
-              {section.heading}
-            </h3>
-            <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: 1.8, whiteSpace: 'pre-line' }}>{section.content}</p>
-          </div>
-        ))}
+        <div style={{ marginTop: 40 }}>
+          {agreement.terms?.sections?.map((section, i) => (
+            <div key={i} className="timeline-item">
+              <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)', marginBottom: 8 }}>
+                {section.heading}
+              </h3>
+              <div style={{ color: '#475569', fontSize: '0.95rem', lineHeight: 1.7, whiteSpace: 'pre-line', padding: '12px 20px', background: '#f8fafc', borderRadius: 16, border: '1px solid var(--border)' }}>
+                {section.content}
+              </div>
+            </div>
+          ))}
+        </div>
 
         {agreement.terms?.enforcement_note && (
           <div style={{ padding: 20, borderRadius: 16, background: 'rgba(102,126,234,0.06)', border: '1px solid rgba(102,126,234,0.15)', marginTop: 40 }}>

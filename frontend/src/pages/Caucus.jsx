@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAppContext } from '../App'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, Send, Lock, AlertCircle, CheckCircle, Bot, User, Sparkles, ShieldCheck, Users } from 'lucide-react'
+import { MessageSquare, Send, Lock, AlertCircle, CheckCircle, Bot, User, Sparkles, ShieldCheck, Users, Mic, MicOff, Volume2, Square } from 'lucide-react'
 import EscalationTracker from '../components/EscalationTracker'
+import useSpeechToText from '../hooks/useSpeechToText'
 
 export default function Caucus() {
   const { API_URL, setToken } = useAppContext()
@@ -21,7 +22,18 @@ export default function Caucus() {
   const [extractedStatement, setExtractedStatement] = useState(null)
   const [submitted, setSubmitted] = useState(false)
   const [waitingForOther, setWaitingForOther] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(null)
   const chatEndRef = useRef(null)
+  const audioRef = useRef(null)
+  const abortControllerRef = useRef(null)
+
+  const { isListening, transcript, startListening, stopListening, isSupported: sttSupported } = useSpeechToText()
+
+  useEffect(() => {
+    if (transcript) {
+      setInput(prev => (prev ? prev + ' ' + transcript : transcript))
+    }
+  }, [transcript])
 
   // Initial token verification
   useEffect(() => { if (token) verifyToken() }, [token])
@@ -43,10 +55,10 @@ export default function Caucus() {
         const data = await res.json()
         if (data.valid) {
           setPartyInfo(data)
-          if (data.status === 'joint_session' || data.status === 'synthesis') {
+          if (data.status === 'joint_session') {
             clearInterval(interval)
             setWaitingForOther(false)
-            // Both parties submitted — navigate to the shared joint session
+            // Both parties submitted and synthesis complete — navigate to the shared joint session
             navigate(`/session/${data.dispute_id}?token=${token}`)
           }
         }
@@ -82,8 +94,63 @@ export default function Caucus() {
       const data = await res.json()
       setMessages(p => [...p, { role: 'ai', content: data.ai_response }])
       if (data.statement_complete) { setStatementComplete(true); setExtractedStatement(data.extracted_statement) }
+      // Auto-play AI response
+      playTTS(data.ai_response, messages.length + 1)
     } catch { setMessages(p => [...p, { role: 'ai', content: 'Connection error. Please try again.' }]) }
     finally { setLoading(false) }
+  }
+
+  const playTTS = async (text, msgId) => {
+    try {
+      // Cancel any ongoing fetch request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      // If clicking the same message that is already speaking, stop it
+      if (isSpeaking === msgId && audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+        setIsSpeaking(null)
+        return
+      }
+
+      // If something else is speaking, stop it first
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      setIsSpeaking(msgId)
+
+      const res = await fetch(`${API_URL}/voice/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, use_elevenlabs: true }),
+        signal: controller.signal
+      })
+
+      if (!res.ok) throw new Error('TTS failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      
+      if (audioRef.current) {
+        audioRef.current.src = url
+        audioRef.current.play()
+        audioRef.current.onended = () => {
+          setIsSpeaking(null)
+          abortControllerRef.current = null
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error('TTS Error:', e)
+        setIsSpeaking(null)
+        abortControllerRef.current = null
+      }
+    }
   }
 
   const submitStatement = async () => {
@@ -158,12 +225,7 @@ export default function Caucus() {
     </div>
   )
 
-  // ─── Loading ────────────────────────────────────────
-  if (!verified) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '100px 0' }}>
-      <div className="spinner" />
-    </div>
-  )
+
 
   // ─── Main Caucus Chat ──────────────────────────────
   return (
@@ -187,51 +249,56 @@ export default function Caucus() {
 
       <EscalationTracker currentStage="caucus" />
 
-      {/* Chat */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-        className="glass-static" style={{ marginTop: 12, borderRadius: 20, display: 'flex', flexDirection: 'column', height: '60vh', overflow: 'hidden' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 12px' }}>
+      {/* Main Chat Interface */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+        className="glass-static" style={{ marginTop: 24, borderRadius: 24, display: 'flex', flexDirection: 'column', height: '65vh', overflow: 'hidden', position: 'relative' }}>
+        
+        {!verified && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: 40, textAlign: 'center' }}>
+            <Lock size={48} color="var(--primary)" style={{ marginBottom: 20, opacity: 0.4 }} />
+            <h3 style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: '1.4rem', marginBottom: 12 }}>Locked Private Session</h3>
+            <p style={{ color: '#64748b', maxWidth: 320 }}>Please verify your identity to access this confidential caucus session.</p>
+          </div>
+        )}
+
+        {/* Chat History */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
           {messages.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '60px 0', color: '#334155' }}>
-              <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-                <Bot size={40} style={{ marginBottom: 12, opacity: 0.3 }} />
-              </motion.div>
-              <p style={{ fontSize: '0.92rem' }}>Start by describing your side of the dispute.</p>
-              <p style={{ fontSize: '0.78rem', marginTop: 4, color: '#1e293b' }}>The AI interviewer will guide you through 6 structured questions.</p>
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--primary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <Bot size={32} color="var(--primary)" />
+              </div>
+              <p style={{ color: '#64748b', fontSize: '0.95rem' }}>The AI Mediator is ready to begin your private interview.</p>
             </div>
           )}
 
           <AnimatePresence>
             {messages.map((msg, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 12, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.35, ease: [0.19, 1, 0.22, 1] }}
-                style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, maxWidth: '78%',
-                              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', background: msg.role === 'user' ? 'rgba(102,126,234,0.15)' : 'rgba(118,75,162,0.15)',
-                                marginBottom: 2 }}>
-                    {msg.role === 'user' ? <User size={14} style={{ color: '#7c8cf0' }} /> : <Bot size={14} style={{ color: '#a78bfa' }} />}
+              <motion.div key={i} initial={{ opacity: 0, x: msg.role === 'user' ? 20 : -20 }} animate={{ opacity: 1, x: 0 }}
+                style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div style={{ maxWidth: '85%' }}>
+                  <div style={{ fontSize: '0.72rem', color: msg.role === 'user' ? 'var(--primary)' : 'var(--secondary)', fontWeight: 800, marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {msg.role === 'user' ? (partyInfo?.name || 'You') : 'AI Mediator'}
+                    {msg.role === 'ai' && (
+                      <button onClick={() => playTTS(msg.content, i)} 
+                        style={{ background: 'none', border: 'none', color: isSpeaking === i ? 'var(--danger)' : '#94a3b8', 
+                                 cursor: 'pointer', padding: 0 }}>
+                        {isSpeaking === i ? <Square size={12} fill="var(--danger)" /> : <Volume2 size={12} />}
+                      </button>
+                    )}
                   </div>
-                  <div className={msg.role === 'user' ? 'chat-bubble chat-bubble-user' : 'chat-bubble chat-bubble-ai'}>
+                  <div className={msg.role === 'user' ? `chat-bubble chat-bubble-party-${partyInfo?.role === 'party_a' ? 'a' : 'b'}` : 'chat-bubble chat-bubble-ai'}
+                       style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                     {msg.content}
                   </div>
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
-
           {loading && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(118,75,162,0.15)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Bot size={14} style={{ color: '#a78bfa' }} />
-              </div>
-              <div className="chat-bubble chat-bubble-ai" style={{ padding: '14px 20px' }}>
-                <div className="typing-indicator"><span /><span /><span /></div>
-              </div>
-            </motion.div>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+              <div className="typing-indicator"><span></span><span></span><span></span></div>
+            </div>
           )}
           <div ref={chatEndRef} />
         </div>
@@ -267,10 +334,21 @@ export default function Caucus() {
 
         {/* Input */}
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input className="input-field" placeholder="Type your message..." value={input}
-              onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              disabled={submitted || statementComplete} style={{ borderRadius: 14 }} />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {sttSupported && (
+              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                onClick={isListening ? stopListening : startListening}
+                style={{ background: isListening ? 'rgba(245,87,108,0.1)' : 'rgba(0,0,0,0.03)', 
+                         border: 'none', color: isListening ? '#f5576c' : '#64748b', 
+                         padding: 10, borderRadius: '50%', cursor: 'pointer' }}>
+                {isListening ? <MicOff size={20} className="animate-pulse" /> : <Mic size={20} />}
+              </motion.button>
+            )}
+            <textarea className="input-field" placeholder={isListening ? "Listening..." : "Type your message..."} 
+              value={input} onChange={e => setInput(e.target.value)} 
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              disabled={submitted || statementComplete} 
+              style={{ borderRadius: 14, minHeight: '48px', maxHeight: '120px', padding: '12px 16px' }} />
             <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
               onClick={sendMessage} className="btn-primary" disabled={loading || !input.trim() || statementComplete}
               style={{ padding: '12px 18px', borderRadius: 14 }}>
@@ -278,6 +356,7 @@ export default function Caucus() {
             </motion.button>
           </div>
         </div>
+        <audio ref={audioRef} style={{ display: 'none' }} />
       </motion.div>
     </div>
   )
